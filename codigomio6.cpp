@@ -1,282 +1,363 @@
+// domino.cpp
+// Juego de Dominó - POO en C++
+// Implementación completa: 2-4 jugadores humanos, 7 fichas por jugador,
+// turno secuencial, bloqueo, reinicio de rondas y puntuación acumulada.
+//
+// Comentarios en primera persona (nosotros hicimos, realizamos).
+
 #include <iostream>
 #include <vector>
-#include <algorithm>
-#include <ctime>
-#include <cstdlib>
+#include <deque>
 #include <string>
+#include <algorithm>
+#include <random>
+#include <ctime>
+#include <limits>
 
 using namespace std;
 
-// ===========================================================
-// CLASE FICHA
-// ===========================================================
+// -----------------------------
+// Clase Ficha
+// -----------------------------
 class Ficha {
+private:
+    int a, b;
 public:
-    int lado1, lado2;
-
-    Ficha(int a, int b) : lado1(a), lado2(b) {}
-
-    void mostrar() const {
-        cout << "[" << lado1 << "|" << lado2 << "]";
-    }
-
-    bool encaja(int valor) const {
-        return (lado1 == valor || lado2 == valor);
-    }
-
-    void girar() {
-        swap(lado1, lado2);
+    Ficha(int aa = 0, int bb = 0) : a(aa), b(bb) {}
+    int first() const { return a; }
+    int second() const { return b; }
+    void flip() { swap(a, b); }
+    int pips() const { return a + b; }
+    bool canConnect(int val) const { return a == val || b == val; }
+    void print() const { cout << "[" << a << "|" << b << "]"; }
+    bool equals(const Ficha& other) const {
+        return (a == other.a && b == other.b) || (a == other.b && b == other.a);
     }
 };
 
-// ===========================================================
-// CLASE JUGADOR
-// ===========================================================
+// -----------------------------
+// Clase Jugador
+// -----------------------------
 class Jugador {
+private:
+    string name;
+    vector<Ficha> hand;
+    int wins; // victorias acumuladas
+
 public:
-    string nombre;
-    vector<Ficha> fichas;
-    int puntuacion = 0;
+    Jugador(const string& n = "Jugador") : name(n), wins(0) {}
 
-    Jugador(string n) : nombre(n) {}
+    const string& getName() const { return name; }
+    int getWins() const { return wins; }
+    void addWin() { ++wins; }
 
-    void agregarFicha(const Ficha &f) {
-        fichas.push_back(f);
+    void clearHand() { hand.clear(); }
+    void receive(const Ficha& f) { hand.push_back(f); }
+    int handSize() const { return (int)hand.size(); }
+    int handPips() const {
+        int s = 0;
+        for (const auto& f : hand) s += f.pips();
+        return s;
     }
 
-    void mostrarFichas() const {
-        cout << nombre << " tiene las siguientes fichas:\n";
-        for (int i = 0; i < fichas.size(); i++) {
-            cout << i << ": ";
-            fichas[i].mostrar();
+    // mostramos la mano indexada desde 1
+    void showHand() const {
+        cout << "\nMano de " << name << " (" << hand.size() << "):\n";
+        for (int i = 0; i < (int)hand.size(); ++i) {
+            cout << i+1 << ". ";
+            hand[i].print();
             cout << "  ";
+            if ((i+1) % 6 == 0) cout << "\n";
         }
         cout << "\n";
     }
 
-    bool tieneMovimientos(int extremoIzq, int extremoDer) const {
-        for (auto &f : fichas)
-            if (f.encaja(extremoIzq) || f.encaja(extremoDer))
-                return true;
+    bool hasPlayable(int left, int right) const {
+        if (left == -1 && right == -1) return !hand.empty();
+        for (const auto& f : hand) if (f.canConnect(left) || f.canConnect(right)) return true;
         return false;
     }
 
-    Ficha jugarFicha(int indice) {
-        Ficha f = fichas[indice];
-        fichas.erase(fichas.begin() + indice);
-        return f;
-    }
+    // get copy of tile at index (0-based)
+    Ficha tileAt(int idx) const { return hand[idx]; }
 
-    bool sinFichas() const {
-        return fichas.empty();
+    // remove tile at idx and return it
+    Ficha playAt(int idx) {
+        Ficha t = hand[idx];
+        hand.erase(hand.begin() + idx);
+        return t;
     }
 };
 
-// ===========================================================
-// CLASE JUEGO DOMINÓ
-// ===========================================================
+// -----------------------------
+// Clase JuegoDomino
+// -----------------------------
 class JuegoDomino {
 private:
-    vector<Ficha> todasLasFichas;
-    vector<Ficha> mesa;
-    vector<Jugador> jugadores;
-    int turnoActual;
+    vector<Ficha> deck;        // conjunto completo que se baraja
+    deque<Ficha> table;        // mesa (deque para poder push_front/push_back)
+    vector<Ficha> boneyard;    // fichas sobrantes (pozo) - por si se implementa robar
+    vector<Jugador*> players;  // punteros para facilitar limpieza y polimorfismo futuro
+    int currentIdx;            // índice del jugador actual
+    mt19937 rng;
+
+    // crear 28 fichas
+    void createDeck() {
+        deck.clear();
+        for (int i = 0; i <= 6; ++i)
+            for (int j = i; j <= 6; ++j)
+                deck.emplace_back(i, j);
+    }
+
+    // barajar deck usando rng
+    void shuffleDeck() {
+        shuffle(deck.begin(), deck.end(), rng);
+    }
+
+    // repartir 7 fichas por jugador; el resto a boneyard
+    void dealHands() {
+        for (auto p : players) p->clearHand();
+        shuffleDeck();
+        int idx = 0;
+        int per = 7;
+        for (int r = 0; r < per; ++r) {
+            for (auto p : players) {
+                if (idx < (int)deck.size()) {
+                    p->receive(deck[idx++]);
+                }
+            }
+        }
+        // restantes al boneyard (si quieres implementar robar)
+        boneyard.clear();
+        while (idx < (int)deck.size()) boneyard.push_back(deck[idx++]);
+    }
+
+    // determina quien comienza: mayor doble; si ninguno, ficha de mayor pips
+    int determineStarter() {
+        int starter = 0;
+        int bestDouble = -1;
+        for (int i = 0; i < (int)players.size(); ++i) {
+            for (int d = 6; d >= 0; --d) {
+                for (int k = 0; k < players[i]->handSize(); ++k) {
+                    const Ficha& f = players[i]->tileAt(k);
+                    if (f.first() == d && f.second() == d) {
+                        if (d > bestDouble) { bestDouble = d; starter = i; }
+                    }
+                }
+            }
+        }
+        if (bestDouble != -1) return starter;
+        // otherwise highest pip tile
+        int bestSum = -1;
+        for (int i = 0; i < (int)players.size(); ++i) {
+            for (int k = 0; k < players[i]->handSize(); ++k) {
+                int s = players[i]->tileAt(k).pips();
+                if (s > bestSum) { bestSum = s; starter = i; }
+            }
+        }
+        return starter;
+    }
+
+    void showTable() const {
+        cout << "\n--- MESA ---\n";
+        if (table.empty()) cout << "(vacía)\n";
+        else {
+            for (const auto& f : table) { f.print(); cout << " "; }
+            cout << "\nExtremos: " << table.front().first() << " ... " << table.back().second() << "\n";
+        }
+        cout << "-------------\n";
+    }
+
+    bool isBlocked() const {
+        if (table.empty()) return false;
+        int L = table.front().first();
+        int R = table.back().second();
+        for (auto p : players) if (p->hasPlayable(L, R)) return false;
+        return true;
+    }
 
 public:
-    void crearFichas() {
-        todasLasFichas.clear();
-        for (int i = 0; i <= 6; i++)
-            for (int j = i; j <= 6; j++)
-                todasLasFichas.emplace_back(i, j);
+    JuegoDomino() : currentIdx(0) {
+        rng.seed(static_cast<unsigned>(time(nullptr)));
     }
 
-    void registrarJugadores() {
-        jugadores.clear();
-        int cant;
-        cout << "Ingrese la cantidad de jugadores (2 a 4): ";
-        cin >> cant;
-        while (cant < 2 || cant > 4) {
-            cout << "Cantidad inválida. Ingrese un número entre 2 y 4: ";
-            cin >> cant;
-        }
-
-        for (int i = 0; i < cant; i++) {
-            string nombre;
-            cout << "Nombre del jugador " << i + 1 << ": ";
-            cin >> nombre;
-            jugadores.emplace_back(nombre);
-        }
+    ~JuegoDomino() {
+        for (auto p : players) delete p;
+        players.clear();
     }
 
-    void repartirFichas() {
-        random_shuffle(todasLasFichas.begin(), todasLasFichas.end());
-        int cantJugadores = jugadores.size();
+    // configurar N jugadores humanos
+    void setupPlayersInteractive() {
+        for (auto p : players) delete p;
+        players.clear();
 
-        for (int i = 0; i < cantJugadores; i++) {
-            for (int j = 0; j < 7; j++) {
-                jugadores[i].agregarFicha(todasLasFichas.back());
-                todasLasFichas.pop_back();
-            }
+        int n;
+        while (true) {
+            cout << "¿Cuántos jugadores? (2-4): ";
+            if (!(cin >> n)) { cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); continue; }
+            if (n >= 2 && n <= 4) break;
+            cout << "Ingrese entre 2 y 4.\n";
+        }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        for (int i = 0; i < n; ++i) {
+            string nm;
+            cout << "Nombre jugador " << i+1 << ": ";
+            getline(cin, nm);
+            if (nm.empty()) nm = "Jugador" + to_string(i+1);
+            players.push_back(new Jugador(nm));
         }
     }
 
-    void mostrarMesa() {
-        cout << "\nMesa: ";
-        for (auto &f : mesa)
-            f.mostrar();
-        cout << "\n";
+    // iniciar una ronda: crear deck, repartir y elegir quien inicia
+    void startRound() {
+        createDeck();
+        shuffleDeck();
+        dealHands();
+        table.clear();
+        currentIdx = determineStarter();
+        cout << "\nInicia la ronda. Comienza: " << players[currentIdx]->getName() << "\n";
+        playRound();
     }
 
-    void iniciarJuego() {
-        crearFichas();
-        repartirFichas();
-        mesa.clear();
+    // lógica principal de la ronda (turnos secuenciales)
+    void playRound() {
+        int passesInRow = 0; // cuenta pases consecutivos para detectar bloqueo
+        bool roundActive = true;
 
-        cout << "\nEl juego comienza...\n";
-        // El primer jugador coloca la primera ficha
-        Jugador &primer = jugadores[0];
-        primer.mostrarFichas();
-        cout << "Elige la ficha inicial para colocar en la mesa (índice): ";
-        int idx;
-        cin >> idx;
-        while (idx < 0 || idx >= primer.fichas.size()) {
-            cout << "Índice inválido, elige otro: ";
-            cin >> idx;
-        }
+        while (roundActive) {
+            showTable();
+            PlayerTurn:
+            {
+                Jugador* cur = players[currentIdx];
+                cout << "\nTurno: " << cur->getName() << "\n";
+                cur->showHand();
 
-        mesa.push_back(primer.jugarFicha(idx));
-        cout << "El juego comienza con la ficha ";
-        mesa[0].mostrar();
-        cout << " colocada por " << primer.nombre << "\n";
+                int L = table.empty() ? -1 : table.front().first();
+                int R = table.empty() ? -1 : table.back().second();
 
-        // Pasa el turno al siguiente jugador
-        turnoActual = 1 % jugadores.size();
-        jugar();
-    }
-
-    void jugar() {
-        bool juegoActivo = true;
-        int jugadoresSinMovimiento = 0;
-
-        while (juegoActivo) {
-            mostrarMesa();
-            Jugador &jug = jugadores[turnoActual];
-            cout << "\nTurno de " << jug.nombre << "\n";
-
-            int extremoIzq = mesa.front().lado1;
-            int extremoDer = mesa.back().lado2;
-
-            // Verificar si puede jugar
-            if (!jug.tieneMovimientos(extremoIzq, extremoDer)) {
-                cout << "❌ " << jug.nombre << " no tiene fichas válidas y pasa su turno.\n";
-                jugadoresSinMovimiento++;
-            } else {
-                jugadoresSinMovimiento = 0;
-                jug.mostrarFichas();
-
-                int indice;
-                cout << "Elige el índice de la ficha que quieres jugar: ";
-                cin >> indice;
-
-                if (indice < 0 || indice >= jug.fichas.size()) {
-                    cout << "Índice inválido. Pierdes turno.\n";
+                // si no puede jugar y no hay mesa vacía -> pasar
+                if (!table.empty() && !cur->hasPlayable(L,R)) {
+                    cout << cur->getName() << " no tiene jugadas válidas y pasa.\n";
+                    passesInRow++;
                 } else {
-                    Ficha f = jug.jugarFicha(indice);
-                    bool jugadaValida = false;
+                    // pedir acción al jugador
+                    int choice = -1;
+                    while (true) {
+                        cout << "Ingrese índice de ficha a jugar (1-" << cur->handSize() << ") o 0 para pasar: ";
+                        if (!(cin >> choice)) { cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); cout << "Entrada inválida.\n"; continue; }
+                        if (choice == 0) { cout << cur->getName() << " pasa.\n"; passesInRow++; break; }
+                        int idx = choice - 1;
+                        if (idx < 0 || idx >= cur->handSize()) { cout << "Índice fuera de rango.\n"; continue; }
+                        Ficha candidate = cur->tileAt(idx);
+                        // si mesa vacía aceptar directamente
+                        if (table.empty()) {
+                            table.push_back(cur->playAt(idx));
+                            cout << cur->getName() << " coloca "; table.back().print(); cout << " (mesa vacía)\n";
+                            passesInRow = 0;
+                            break;
+                        }
+                        // else preguntar lado
+                        char side;
+                        cout << "Colocar en (I)zquierda o (D)erecha? ";
+                        cin >> side; side = toupper(side);
+                        int need = (side == 'I') ? L : R;
+                        if (side != 'I' && side != 'D') { cout << "Lado inválido.\n"; continue; }
+                        if (!candidate.canConnect(need)) { cout << "Esa ficha no encaja en ese lado.\n"; continue; }
+                        // orientar correctamente: si inserting left we want candidate.second()==need
+                        if (side == 'I') {
+                            if (candidate.second() != need) candidate.flip();
+                            table.push_front(cur->playAt(idx));
+                            cout << cur->getName() << " coloca en izquierda "; table.front().print(); cout << "\n";
+                        } else {
+                            if (candidate.first() != need) candidate.flip();
+                            table.push_back(cur->playAt(idx));
+                            cout << cur->getName() << " coloca en derecha "; table.back().print(); cout << "\n";
+                        }
+                        passesInRow = 0;
+                        break;
+                    } // end action loop
+                }
 
-                    // Detección automática
-                    if (f.lado2 == extremoIzq) {
-                        mesa.insert(mesa.begin(), f);
-                        jugadaValida = true;
-                    } else if (f.lado1 == extremoIzq) {
-                        f.girar();
-                        mesa.insert(mesa.begin(), f);
-                        jugadaValida = true;
-                    } else if (f.lado1 == extremoDer) {
-                        mesa.push_back(f);
-                        jugadaValida = true;
-                    } else if (f.lado2 == extremoDer) {
-                        f.girar();
-                        mesa.push_back(f);
-                        jugadaValida = true;
-                    }
-
-                    if (!jugadaValida) {
-                        cout << "❌ Esa ficha no encaja en ningún extremo. No puedes jugarla.\n";
-                        jug.agregarFicha(f); // devolver ficha
-                    } else {
-                        cout << "✅ Ficha colocada correctamente.\n";
+                // check win
+                if (cur->handSize() == 0) {
+                    cout << "\n***** " << cur->getName() << " se quedó sin fichas y gana la ronda! *****\n";
+                    cur->addWin();
+                    roundActive = false;
+                } else {
+                    // check bloqueo: if passesInRow >= players.size() => blocked
+                    if (passesInRow >= (int)players.size() || isBlocked()) {
+                        cout << "\n***** Ronda BLOQUEADA *****\n";
+                        // determine winner by lowest hand pips
+                        int winner = 0;
+                        int minPips = players[0]->handPips();
+                        for (int i = 1; i < (int)players.size(); ++i) {
+                            int pips = players[i]->handPips();
+                            cout << players[i]->getName() << " tiene " << pips << " pips.\n";
+                            if (pips < minPips) { minPips = pips; winner = i; }
+                        }
+                        cout << "Gana por menor pips: " << players[winner]->getName() << "\n";
+                        players[winner]->addWin();
+                        roundActive = false;
                     }
                 }
+            } // end PlayerTurn
+
+            if (roundActive) {
+                currentIdx = (currentIdx + 1) % players.size();
             }
+        } // end while roundActive
 
-            // Verificar si alguien ganó
-            if (jug.sinFichas()) {
-                cout << "\n🎉 " << jug.nombre << " ha ganado el juego! 🎉\n";
-                jug.puntuacion++;
-                juegoActivo = false;
-                break;
-            }
-
-            // Verificar bloqueo
-            if (jugadoresSinMovimiento >= jugadores.size()) {
-                cout << "\n🧱 El juego se bloqueó: nadie puede jugar.\n";
-                int minPuntos = 999;
-                string ganadorBloqueo;
-                for (auto &j : jugadores) {
-                    int suma = 0;
-                    for (auto &f : j.fichas)
-                        suma += f.lado1 + f.lado2;
-                    if (suma < minPuntos) {
-                        minPuntos = suma;
-                        ganadorBloqueo = j.nombre;
-                    }
-                }
-                cout << "Ganador por menor puntaje en mano: " << ganadorBloqueo << "\n";
-                for (auto &j : jugadores)
-                    if (j.nombre == ganadorBloqueo)
-                        j.puntuacion++;
-                break;
-            }
-
-            // Cambiar turno
-            turnoActual = (turnoActual + 1) % jugadores.size();
-        }
-
-        mostrarTablaPuntuaciones();
-        menuReinicio();
+        // mostrar victorias acumuladas
+        cout << "\nVictorias acumuladas:\n";
+        for (auto p : players) cout << p->getName() << ": " << p->getWins() << "\n";
     }
 
-    void mostrarTablaPuntuaciones() {
-        cout << "\n===== TABLA DE PUNTUACIONES =====\n";
-        for (auto &j : jugadores) {
-            cout << j.nombre << " -> " << j.puntuacion << " puntos\n";
-        }
-        cout << "=================================\n";
-    }
-
-    void menuReinicio() {
-        char opcion;
-        cout << "\n¿Deseas reiniciar la partida? (s/n): ";
-        cin >> opcion;
-        if (opcion == 's' || opcion == 'S') {
-            for (auto &j : jugadores)
-                j.fichas.clear();
-            iniciarJuego();
-        } else {
-            cout << "\nGracias por jugar Dominó 🎮\n";
+    // menu principal / control de sesiones y reinicio
+    void mainMenu() {
+        bool running = true;
+        while (running) {
+            cout << "\n=== MENU PRINCIPAL ===\n";
+            cout << "1) Configurar jugadores\n";
+            cout << "2) Nueva ronda\n";
+            cout << "3) Ver marcador\n";
+            cout << "4) Reiniciar marcador y jugadores\n";
+            cout << "5) Salir\n";
+            cout << "Seleccione opcion: ";
+            int opt;
+            if (!(cin >> opt)) { cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); continue; }
+            switch (opt) {
+                case 1:
+                    setupPlayersInteractive();
+                    break;
+                case 2:
+                    if (players.empty()) { cout << "Configure jugadores primero (opcion 1).\n"; break; }
+                    startRound();
+                    break;
+                case 3:
+                    for (auto p : players) cout << p->getName() << ": " << p->getWins() << " victorias\n";
+                    break;
+                case 4:
+                    for (auto p : players) p->clearHand(), delete p;
+                    players.clear();
+                    cout << "Marcador y jugadores reiniciados. Configure nuevamente.\n";
+                    break;
+                case 5:
+                    running = false;
+                    break;
+                default:
+                    cout << "Opcion no valida.\n";
+            }
         }
     }
 };
 
-// ===========================================================
-// FUNCIÓN PRINCIPAL
-// ===========================================================
+// -----------------------------
+// main
+// -----------------------------
 int main() {
-    srand(time(0));
-    JuegoDomino juego;
-    cout << "=== Bienvenido al Dominó Multijugador ===\n";
-    juego.registrarJugadores();
-    juego.iniciarJuego();
+    // nosotros realizamos este juego para la materia POO
+    JuegoDomino game;
+    game.mainMenu();
+    cout << "Gracias por jugar. Fin.\n";
     return 0;
 }

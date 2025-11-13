@@ -114,7 +114,7 @@ A continuación se indican algunas recomendaciones importantes para que los prog
   - El juego permite varias rondas y mantiene un registro de victorias.  
   - Para reiniciar una partida, use la opción de reinicio sin cerrar el programa.
 
-> Nota: Todos los programas requieren seguir las indicaciones en consola. No ingresar datos fuera del formato esperado puede generar errores o resultados inesperados.
+> Nota: No ingresar datos fuera del formato esperado puede generar errores o resultados inesperados.
 # Autores
 
 Juan Suárez Herron  

@@ -1,9 +1,5 @@
-// domino.cpp
-// Juego de Dominó - POO en C++
-// Implementación completa: 2-4 jugadores humanos, 7 fichas por jugador,
-// turno secuencial, bloqueo, reinicio de rondas y puntuación acumulada.
-//
-// Comentarios en primera persona (nosotros hicimos, realizamos).
+// domino_fixed.cpp
+// Juego de Dominó - POO en C++ (correcciones de orientación & flujo de turnos)
 
 #include <iostream>
 #include <vector>
@@ -81,7 +77,7 @@ public:
     // get copy of tile at index (0-based)
     Ficha tileAt(int idx) const { return hand[idx]; }
 
-    // remove tile at idx and return it
+    // remove tile at idx and return it (ya devuelve copia)
     Ficha playAt(int idx) {
         Ficha t = hand[idx];
         hand.erase(hand.begin() + idx);
@@ -117,7 +113,7 @@ private:
     // repartir 7 fichas por jugador; el resto a boneyard
     void dealHands() {
         for (auto p : players) p->clearHand();
-        shuffleDeck();
+        // deck ya barajado por quien llame a esta función
         int idx = 0;
         int per = 7;
         for (int r = 0; r < per; ++r) {
@@ -137,11 +133,12 @@ private:
         int starter = 0;
         int bestDouble = -1;
         for (int i = 0; i < (int)players.size(); ++i) {
-            for (int d = 6; d >= 0; --d) {
-                for (int k = 0; k < players[i]->handSize(); ++k) {
-                    const Ficha& f = players[i]->tileAt(k);
-                    if (f.first() == d && f.second() == d) {
-                        if (d > bestDouble) { bestDouble = d; starter = i; }
+            for (int k = 0; k < players[i]->handSize(); ++k) {
+                const Ficha& f = players[i]->tileAt(k);
+                if (f.first() == f.second()) {
+                    if (f.first() > bestDouble) {
+                        bestDouble = f.first();
+                        starter = i;
                     }
                 }
             }
@@ -226,82 +223,91 @@ public:
 
         while (roundActive) {
             showTable();
-            PlayerTurn:
-            {
-                Jugador* cur = players[currentIdx];
-                cout << "\nTurno: " << cur->getName() << "\n";
-                cur->showHand();
 
-                int L = table.empty() ? -1 : table.front().first();
-                int R = table.empty() ? -1 : table.back().second();
+            Jugador* cur = players[currentIdx];
+            cout << "\nTurno: " << cur->getName() << "\n";
+            cur->showHand();
 
-                // si no puede jugar y no hay mesa vacía -> pasar
-                if (!table.empty() && !cur->hasPlayable(L,R)) {
-                    cout << cur->getName() << " no tiene jugadas válidas y pasa.\n";
-                    passesInRow++;
-                } else {
-                    // pedir acción al jugador
-                    int choice = -1;
-                    while (true) {
-                        cout << "Ingrese índice de ficha a jugar (1-" << cur->handSize() << ") o 0 para pasar: ";
-                        if (!(cin >> choice)) { cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); cout << "Entrada inválida.\n"; continue; }
-                        if (choice == 0) { cout << cur->getName() << " pasa.\n"; passesInRow++; break; }
-                        int idx = choice - 1;
-                        if (idx < 0 || idx >= cur->handSize()) { cout << "Índice fuera de rango.\n"; continue; }
-                        Ficha candidate = cur->tileAt(idx);
-                        // si mesa vacía aceptar directamente
-                        if (table.empty()) {
-                            table.push_back(cur->playAt(idx));
-                            cout << cur->getName() << " coloca "; table.back().print(); cout << " (mesa vacía)\n";
-                            passesInRow = 0;
-                            break;
-                        }
-                        // else preguntar lado
-                        char side;
-                        cout << "Colocar en (I)zquierda o (D)erecha? ";
-                        cin >> side; side = toupper(side);
-                        int need = (side == 'I') ? L : R;
-                        if (side != 'I' && side != 'D') { cout << "Lado inválido.\n"; continue; }
-                        if (!candidate.canConnect(need)) { cout << "Esa ficha no encaja en ese lado.\n"; continue; }
-                        // orientar correctamente: si inserting left we want candidate.second()==need
-                        if (side == 'I') {
-                            if (candidate.second() != need) candidate.flip();
-                            table.push_front(cur->playAt(idx));
-                            cout << cur->getName() << " coloca en izquierda "; table.front().print(); cout << "\n";
-                        } else {
-                            if (candidate.first() != need) candidate.flip();
-                            table.push_back(cur->playAt(idx));
-                            cout << cur->getName() << " coloca en derecha "; table.back().print(); cout << "\n";
-                        }
+            int L = table.empty() ? -1 : table.front().first();
+            int R = table.empty() ? -1 : table.back().second();
+
+            bool playedThisTurn = false;
+
+            // si no puede jugar y no hay mesa vacía -> pasar
+            if (!table.empty() && !cur->hasPlayable(L,R)) {
+                cout << cur->getName() << " no tiene jugadas válidas y pasa.\n";
+                passesInRow++;
+            } else {
+                // pedir acción al jugador
+                int choice = -1;
+                while (true) {
+                    cout << "Ingrese índice de ficha a jugar (1-" << cur->handSize() << ") o 0 para pasar: ";
+                    if (!(cin >> choice)) { cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); cout << "Entrada inválida.\n"; continue; }
+                    if (choice == 0) { cout << cur->getName() << " pasa.\n"; passesInRow++; break; }
+                    int idx = choice - 1;
+                    if (idx < 0 || idx >= cur->handSize()) { cout << "Índice fuera de rango.\n"; continue; }
+                    Ficha candidate = cur->tileAt(idx);
+                    // si mesa vacía aceptar directamente
+                    if (table.empty()) {
+                        Ficha played = cur->playAt(idx); // sacamos la ficha real
+                        table.push_back(played);
+                        cout << cur->getName() << " coloca "; table.back().print(); cout << " (mesa vacía)\n";
                         passesInRow = 0;
+                        playedThisTurn = true;
                         break;
-                    } // end action loop
-                }
-
-                // check win
-                if (cur->handSize() == 0) {
-                    cout << "\n***** " << cur->getName() << " se quedó sin fichas y gana la ronda! *****\n";
-                    cur->addWin();
-                    roundActive = false;
-                } else {
-                    // check bloqueo: if passesInRow >= players.size() => blocked
-                    if (passesInRow >= (int)players.size() || isBlocked()) {
-                        cout << "\n***** Ronda BLOQUEADA *****\n";
-                        // determine winner by lowest hand pips
-                        int winner = 0;
-                        int minPips = players[0]->handPips();
-                        for (int i = 1; i < (int)players.size(); ++i) {
-                            int pips = players[i]->handPips();
-                            cout << players[i]->getName() << " tiene " << pips << " pips.\n";
-                            if (pips < minPips) { minPips = pips; winner = i; }
-                        }
-                        cout << "Gana por menor pips: " << players[winner]->getName() << "\n";
-                        players[winner]->addWin();
-                        roundActive = false;
                     }
-                }
-            } // end PlayerTurn
+                    // else preguntar lado
+                    char side;
+                    cout << "Colocar en (I)zquierda o (D)erecha? ";
+                    cin >> side; side = toupper(side);
+                    if (side != 'I' && side != 'D') { cout << "Lado inválido.\n"; continue; }
 
+                    int need = (side == 'I') ? L : R;
+                    if (!candidate.canConnect(need)) { cout << "Esa ficha no encaja en ese lado.\n"; continue; }
+
+                    // remove the real tile from player's hand, then orient that returned tile before inserting
+                    Ficha played = cur->playAt(idx);
+                    if (side == 'I') {
+                        // queremos que played.second() == need
+                        if (played.second() != need) played.flip();
+                        table.push_front(played);
+                        cout << cur->getName() << " coloca en izquierda "; table.front().print(); cout << "\n";
+                    } else {
+                        // queremos que played.first() == need
+                        if (played.first() != need) played.flip();
+                        table.push_back(played);
+                        cout << cur->getName() << " coloca en derecha "; table.back().print(); cout << "\n";
+                    }
+                    passesInRow = 0;
+                    playedThisTurn = true;
+                    break;
+                } // end action loop
+            }
+
+            // check win
+            if (cur->handSize() == 0) {
+                cout << "\n***** " << cur->getName() << " se quedó sin fichas y gana la ronda! *****\n";
+                cur->addWin();
+                roundActive = false;
+            } else {
+                // check bloqueo: if passesInRow >= players.size() => blocked OR isBlocked()
+                if (passesInRow >= (int)players.size() || isBlocked()) {
+                    cout << "\n***** Ronda BLOQUEADA *****\n";
+                    // determine winner by lowest hand pips
+                    int winner = 0;
+                    int minPips = players[0]->handPips();
+                    for (int i = 1; i < (int)players.size(); ++i) {
+                        int pips = players[i]->handPips();
+                        cout << players[i]->getName() << " tiene " << pips << " pips.\n";
+                        if (pips < minPips) { minPips = pips; winner = i; }
+                    }
+                    cout << players[winner]->getName() << " tiene menor pips (" << minPips << ") y gana la ronda.\n";
+                    players[winner]->addWin();
+                    roundActive = false;
+                }
+            }
+
+            // Avanzar al siguiente jugador siempre si la ronda sigue
             if (roundActive) {
                 currentIdx = (currentIdx + 1) % players.size();
             }
@@ -337,7 +343,7 @@ public:
                     for (auto p : players) cout << p->getName() << ": " << p->getWins() << " victorias\n";
                     break;
                 case 4:
-                    for (auto p : players) p->clearHand(), delete p;
+                    for (auto p : players) { p->clearHand(); delete p; }
                     players.clear();
                     cout << "Marcador y jugadores reiniciados. Configure nuevamente.\n";
                     break;

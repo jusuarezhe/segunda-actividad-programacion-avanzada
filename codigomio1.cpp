@@ -47,7 +47,7 @@ public:
 
     // Sobrecarga del operador * para producto escalar
     double operator*(const Vector3D &otro) const {
-        // Este metodo calcula el producto punto (dot product)
+        // Este metodo calcula el producto punto 
         return x * otro.x + y * otro.y + z * otro.z;
     }
 
@@ -102,7 +102,6 @@ int main() {
 
     cout << "Producto escalar: " << producto << endl;
 
-    cout << "\nPrograma realizado por nosotros en grupo para practicar clases y operadores en C++" << endl;
 
     return 0;
 }

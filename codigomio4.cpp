@@ -4,9 +4,9 @@
 #include <initializer_list>
 using namespace std;
 
-// =====================================
+
 // CLASE COMPLEX (forma binomial a + ib)
-// =====================================
+
 class Polar; // Declaración anticipada para permitir conversiones
 
 class Complex {
@@ -68,9 +68,9 @@ public:
     }
 };
 
-// =====================================
+
 // CLASE POLAR (forma r ∠ θ)
-// =====================================
+
 class Polar {
 private:
     double r; // magnitud
@@ -123,10 +123,10 @@ Complex::Complex(const Polar& p) {
     b = p.magnitud() * sin(p.angulo());
 }
 
-// =====================================
+
 // FUNCION ACUMULA
 // Suma una lista de números complejos (en forma binomial o polar)
-// =====================================
+
 Complex acumula(initializer_list<Complex> lista) {
     Complex suma(0, 0);
     for (const auto& c : lista) {
@@ -143,9 +143,9 @@ Complex acumula(initializer_list<Polar> lista) {
     return suma;
 }
 
-// =====================================
+
 // PROGRAMA PRINCIPAL
-// =====================================
+
 int main() {
     cout << "=== NUMEROS COMPLEJOS Y POLARES ===\n";
 

@@ -140,7 +140,7 @@ int main() {
     cout << "P(" << x << ") = " << p1.evaluar(x) << endl;
 
     cout << "\nAqui nosotros probamos todas las operaciones principales del polinomio: suma, producto, derivada y evaluacion." << endl;
-    cout << "Cada uno de nosotros reviso una parte del codigo para comprobar que funcionara bien." << endl;
+   
 
     return 0;
 }

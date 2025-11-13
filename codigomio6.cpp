@@ -1,5 +1,5 @@
 // domino_fixed.cpp
-// Juego de Dominó - POO en C++ (correcciones de orientación & flujo de turnos)
+// Juego de Dominó - en C++ 
 
 #include <iostream>
 #include <vector>
@@ -12,9 +12,9 @@
 
 using namespace std;
 
-// -----------------------------
+
 // Clase Ficha
-// -----------------------------
+
 class Ficha {
 private:
     int a, b;
@@ -31,9 +31,8 @@ public:
     }
 };
 
-// -----------------------------
 // Clase Jugador
-// -----------------------------
+
 class Jugador {
 private:
     string name;
@@ -85,9 +84,9 @@ public:
     }
 };
 
-// -----------------------------
+
 // Clase JuegoDomino
-// -----------------------------
+
 class JuegoDomino {
 private:
     vector<Ficha> deck;        // conjunto completo que se baraja
@@ -361,7 +360,6 @@ public:
 // main
 // -----------------------------
 int main() {
-    // nosotros realizamos este juego para la materia POO
     JuegoDomino game;
     game.mainMenu();
     cout << "Gracias por jugar. Fin.\n";

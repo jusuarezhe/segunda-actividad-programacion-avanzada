@@ -107,8 +107,9 @@ A continuación se indican algunas recomendaciones importantes para que los prog
 
 - **codigomio6.cpp — Juego de Dominó:**  
   - Al ejecutar, aparecerá un **menú inicial** con opciones para iniciar el juego, ver reglas o salir.  
-  - Seleccione **“Iniciar Juego”** para comenzar una partida.  
-  - Ingrese el número de jugadores humanos (2 a 4).  
+  - Seleccione **“  configurar jugadores”**  
+  - Ingrese el número de jugadores humanos (2 a 4) y nombre de cada uno de los jugadores.  
+  - una vez ingresado el numero de jugadores y sus nombres el codigo lo devolvera al menu principal y debe darle a la opcion **“  Nueva ronda”** 
   - Cada jugador verá sus fichas y podrá seleccionar cuál colocar.  
   - Lea cuidadosamente las instrucciones en pantalla; si se omite un paso o no se selecciona correctamente, el programa puede parecer que “no funciona”.  
   - El juego permite varias rondas y mantiene un registro de victorias.  
